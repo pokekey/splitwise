@@ -1,6 +1,7 @@
 import oauth2 as oauth
 import time
 import json
+import logging
 from splitwise.user import Friend, CurrentUser
 from splitwise.currency import Currency
 from splitwise.group import Group
@@ -13,6 +14,10 @@ try:
     from urllib import urlencode
 except ImportError: #Python 3
     from urllib.parse import parse_qsl, urlencode
+
+
+class SplitwiseAPIException(Exception):
+    pass
 
 
 class Splitwise(object):
@@ -38,7 +43,7 @@ class Splitwise(object):
     CREATE_EXPENSE_URL  = SPLITWISE_BASE_URL+"api/"+SPLITWISE_VERSION+"/create_expense"
     CREATE_GROUP_URL    = SPLITWISE_BASE_URL+"api/"+SPLITWISE_VERSION+"/create_group"
 
-    debug = False
+    logger = logging.getLogger(__name__)
 
 
     def __init__(self,consumer_key,consumer_secret,access_token=None):
@@ -57,14 +62,7 @@ class Splitwise(object):
         #If access token is present then set the Access token
         if access_token:
             self.setAccessToken(access_token)
-
-    @classmethod
-    def setDebug(cls,debug):
-        cls.debug = debug
-
-    @classmethod
-    def isDebug(cls):
-        return cls.debug
+        
 
     def getAuthorizeURL(self):
 
@@ -73,12 +71,12 @@ class Splitwise(object):
         #Get the request token
         resp, content = client.request(Splitwise.REQUEST_TOKEN_URL, "POST")
 
-        if Splitwise.isDebug():
-            print(resp, content)
+        self.logger.debug("Authorise token request " + str(resp) + str(content))
 
         #Check if the response is correct
         if resp['status'] != '200':
-            raise Exception("Invalid response %s. Please check your consumer key and secret." % resp['status'])
+            logger.error("Splitwise request '{}' -> status {}".format(Splitwise.REQUEST_TOKEN_URL, resp['status']))
+            raise SplitwiseAPIException("Invalid response %s. Please check your consumer key and secret." % resp['status'])
 
         request_token = dict(parse_qsl(content.decode("utf-8")))
 
@@ -93,12 +91,12 @@ class Splitwise(object):
 
         resp, content = client.request(Splitwise.ACCESS_TOKEN_URL, "POST")
 
-        if Splitwise.isDebug():
-            print(resp, content)
+        self.logger.debug("Access token request " + str(resp) + str(content))
 
         #Check if the response is correct
         if resp['status'] != '200':
-            raise Exception("Invalid response %s. Please check your consumer key and secret." % resp['status'])
+            logger.error("Splitwise request '{}' -> status {}".format(Splitwise.ACCESS_TOKEN_URL, resp['status']))
+            raise SplitwiseAPIException("Invalid response %s. Please check your consumer key and secret." % resp['status'])
 
         access_token = dict(parse_qsl(content.decode("utf-8")))
 
@@ -112,16 +110,24 @@ class Splitwise(object):
     def __makeRequest(self,url,method="GET",data=None):
 
         if data:
-            resp, content = self.client.request(url,method,body=urlencode(data))
+            resp, resp_bytes = self.client.request(url,method,body=urlencode(data))
         else:
-            resp, content = self.client.request(url,method)
+            resp, resp_bytes = self.client.request(url,method)
 
-        if Splitwise.isDebug():
-            print(resp, content)
+        self.logger.debug("Request {} token REQUEST {}  RESPONSE {} ".format(url, str(resp), str(resp_bytes)))
 
         #Check if the response is correct
         if resp['status'] != '200':
-            raise Exception("Invalid response %s. Please check your consumer key and secret." % resp['status'])
+            logger.error("Splitwise request '{}' -> status {}".format(url, resp['status']))
+            raise SplitwiseAPIException("Invalid response %s. Please check your consumer key and secret." % resp['status'])
+
+        content = json.loads(resp_bytes.decode("utf-8"))
+
+        if "errors" in content:
+            errors = content["errors"]
+            if len(errors) > 0:
+                error_message = ", ".join(content["errors"].get('base', ['unknown']))
+                raise SplitwiseAPIException("Exception in %s: %s" % (url, error_message))
 
         return content
 
@@ -129,20 +135,18 @@ class Splitwise(object):
         return "?"+urlencode(options)
 
     def getCurrentUser(self):
-
         content = self.__makeRequest(Splitwise.GET_CURRENT_USER_URL)
-        content = json.loads(content.decode("utf-8"))
         return CurrentUser(content["user"])
 
     def getUser(self, id):
         content = self.__makeRequest(Splitwise.GET_USER_URL +"/"+str(id))
-        content = json.loads(content.decode("utf-8"))
+        
         return User(content["user"])
 
     def getFriends(self):
 
         content = self.__makeRequest(Splitwise.GET_FRIENDS_URL)
-        content = json.loads(content.decode("utf-8"))
+        
 
         friends = []
         if "friends" in content:
@@ -154,7 +158,7 @@ class Splitwise(object):
     def getGroups(self):
 
         content = self.__makeRequest(Splitwise.GET_GROUPS_URL)
-        content = json.loads(content.decode("utf-8"))
+        
 
         groups = []
         if "groups" in content:
@@ -166,7 +170,7 @@ class Splitwise(object):
     def getCurrencies(self):
 
         content = self.__makeRequest(Splitwise.GET_CURRENCY_URL)
-        content = json.loads(content.decode("utf-8"))
+        
 
         currencies = []
         if "currencies" in content:
@@ -178,7 +182,7 @@ class Splitwise(object):
     def getCategories(self):
 
         content = self.__makeRequest(Splitwise.GET_CATEGORY_URL)
-        content = json.loads(content.decode("utf-8"))
+        
         categories = []
 
         if "categories" in content:
@@ -190,7 +194,7 @@ class Splitwise(object):
     def getGroup(self,id=0):
 
         content = self.__makeRequest(Splitwise.GET_GROUP_URL+"/"+str(id))
-        content = json.loads(content.decode("utf-8"))
+        
         group = None
         if "group" in content:
             group = Group(content["group"])
@@ -214,7 +218,7 @@ class Splitwise(object):
 
         url += self.__prepareOptionsUrl(options)
         content = self.__makeRequest(url)
-        content = json.loads(content.decode("utf-8"))
+        
         expenses = []
         if "expenses" in content:
             for e in content["expenses"]:
@@ -224,7 +228,7 @@ class Splitwise(object):
 
     def getExpense(self,id):
         content = self.__makeRequest(Splitwise.GET_EXPENSE_URL+"/"+str(id))
-        content = json.loads(content.decode("utf-8"))
+        
         expense = None
         if "expense" in content:
             expense = Expense(content["expense"])
@@ -244,11 +248,12 @@ class Splitwise(object):
         #Add user values to expense_data
         Splitwise.setUserArray(expense_users, expense_data)
         content = self.__makeRequest(Splitwise.CREATE_EXPENSE_URL,"POST",expense_data)
-        content = json.loads(content.decode("utf-8"))
+        
         expense = None
 
         if "expenses" in content:
-            expense = Expense(content["expenses"][0])
+            if len(content["expenses"]):
+                expense = Expense(content["expenses"][0])
 
         return expense
 
@@ -262,7 +267,7 @@ class Splitwise(object):
             Splitwise.setUserArray(group_members, group_info)
 
         content = self.__makeRequest(Splitwise.CREATE_GROUP_URL, "POST", group_info)
-        content = json.loads(content.decode("utf-8"))
+        
         group_detail = None
 
         if "group" in content:

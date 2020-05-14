@@ -19,6 +19,9 @@ except ImportError: #Python 3
 class SplitwiseAPIException(Exception):
     pass
 
+class SplitwiseAPIUnauthorizedException(Exception):
+    pass
+
 
 class Splitwise(object):
     """ The Splitwise class to make the requests to splitwise server.
@@ -75,7 +78,7 @@ class Splitwise(object):
 
         #Check if the response is correct
         if resp['status'] != '200':
-            logger.error("Splitwise request '{}' -> status {}".format(Splitwise.REQUEST_TOKEN_URL, resp['status']))
+            self.logger.error("Splitwise request '{}' -> status {}".format(Splitwise.REQUEST_TOKEN_URL, resp['status']))
             raise SplitwiseAPIException("Invalid response %s. Please check your consumer key and secret." % resp['status'])
 
         request_token = dict(parse_qsl(content.decode("utf-8")))
@@ -95,7 +98,7 @@ class Splitwise(object):
 
         #Check if the response is correct
         if resp['status'] != '200':
-            logger.error("Splitwise request '{}' -> status {}".format(Splitwise.ACCESS_TOKEN_URL, resp['status']))
+            self.logger.error("Splitwise request '{}' -> status {}".format(Splitwise.ACCESS_TOKEN_URL, resp['status']))
             raise SplitwiseAPIException("Invalid response %s. Please check your consumer key and secret." % resp['status'])
 
         access_token = dict(parse_qsl(content.decode("utf-8")))
@@ -118,8 +121,11 @@ class Splitwise(object):
 
         #Check if the response is correct
         if resp['status'] != '200':
-            logger.error("Splitwise request '{}' -> status {}".format(url, resp['status']))
-            raise SplitwiseAPIException("Invalid response %s. Please check your consumer key and secret." % resp['status'])
+            self.logger.error("Splitwise request '{}' -> status {}".format(url, resp['status']))
+            if resp['status'] == '401':
+                raise SplitwiseAPIUnauthorizedException("Unauthorized")
+            else:
+                raise SplitwiseAPIException("Error response %s. Please check your consumer key and secret." % resp['status'])
 
         content = json.loads(resp_bytes.decode("utf-8"))
 

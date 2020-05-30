@@ -19,7 +19,7 @@ except ImportError: #Python 3
 class SplitwiseAPIException(Exception):
     pass
 
-class SplitwiseAPIUnauthorizedException(Exception):
+class SplitwiseAPIUnauthorizedException(SplitwiseAPIException):
     pass
 
 

@@ -45,6 +45,7 @@ class Splitwise(object):
     GET_EXPENSE_URL     = SPLITWISE_BASE_URL+"api/"+SPLITWISE_VERSION+"/get_expense"
     CREATE_EXPENSE_URL  = SPLITWISE_BASE_URL+"api/"+SPLITWISE_VERSION+"/create_expense"
     CREATE_GROUP_URL    = SPLITWISE_BASE_URL+"api/"+SPLITWISE_VERSION+"/create_group"
+    DELETE_GROUP_URL    = SPLITWISE_BASE_URL+"api/"+SPLITWISE_VERSION+"/delete_group"
 
     logger = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class Splitwise(object):
             if resp['status'] == '401':
                 raise SplitwiseAPIUnauthorizedException("Unauthorized")
             else:
-                raise SplitwiseAPIException("Error response %s. Please check your consumer key and secret." % resp['status'])
+                raise SplitwiseAPIException("Error response {}. {}".format(resp['status'],resp.reason))
 
         content = json.loads(resp_bytes.decode("utf-8"))
 
@@ -280,6 +281,13 @@ class Splitwise(object):
             group_detail = Group(content["group"])
 
         return group_detail
+
+
+    def deleteGroup(self, group_id):
+        content = self.__makeRequest(Splitwise.DELETE_GROUP_URL+"/"+str(group_id))
+
+
+
 
     @staticmethod
     def setUserArray(users, user_array):

@@ -120,6 +120,20 @@ class Friend(User):
 
 class ExpenseUser(User):
 
+
+    @classmethod
+    def fromUser(cls, user):
+        eu = cls()
+        eu.last_name = user.last_name
+        eu.first_name = user.first_name
+        eu.id = user.id
+        eu.email = user.email
+        eu.paid_share  = 0.0
+        eu.owed_share  = 0.0
+        eu.net_balance = 0.0
+        return eu
+
+
     def __init__(self,data=None):
 
         if data:
